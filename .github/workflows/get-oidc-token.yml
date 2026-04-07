@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       audience:
-        description: 'Audience for OIDC token (default: https://sts.googleapis.com)'
+        description: 'Audience for OIDC token (WIF provider resource URL)'
         required: false
-        default: 'https://sts.googleapis.com'
+        default: '//iam.googleapis.com/projects/444107641422/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
         type: string
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
