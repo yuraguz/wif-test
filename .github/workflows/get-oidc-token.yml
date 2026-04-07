@@ -111,7 +111,7 @@ jobs:
           
           echo "Exchanging token..."
           
-          # Token Exchange запрос
+          # Token Exchange запрос (ограниченные права - только чтение)
           RESPONSE=$(curl -s -X POST \
             "https://sts.googleapis.com/v1/token" \
             -H "Content-Type: application/x-www-form-urlencoded" \
@@ -119,7 +119,8 @@ jobs:
             -d "audience=$AUDIENCE" \
             -d "subject_token_type=urn:ietf:params:oauth:token-type:jwt" \
             -d "subject_token=${TOKEN_VALUE}" \
-            -d "requested_token_type=urn:ietf:params:oauth:token-type:access_token")
+            -d "requested_token_type=urn:ietf:params:oauth:token-type:access_token" \
+            -d "scope=https://www.googleapis.com/auth/cloud-platform.read-only")
           
           echo "Response: $RESPONSE"
           
