@@ -57,15 +57,17 @@ jobs:
           echo "oidc_token=$(echo "$OIDC_RESPONSE" | jq -r '.value')" >> $GITHUB_OUTPUT
       
       - name: Display Token Parts
+        env:
+          OIDC_TOKEN: ${{ steps.oidc.outputs.oidc_token }}
         run: |
           echo "=== OIDC Token received ==="
-          echo "Token length: ${#${{ steps.oidc.outputs.oidc_token }}}"
+          echo "Token length: ${#OIDC_TOKEN}"
           echo ""
           echo "=== Token preview (first 100 chars) ==="
-          echo "${{ steps.oidc.outputs.oidc_token }}" | cut -c1-100
+          echo "$OIDC_TOKEN" | cut -c1-100
           echo "..."
           echo ""
           echo "=== Key Claims ==="
-          PAYLOAD=$(echo "${{ steps.oidc.outputs.oidc_token }}" | cut -d. -f2)
+          PAYLOAD=$(echo "$OIDC_TOKEN" | cut -d. -f2)
           DECODED=$(echo "$PAYLOAD" | base64 -d 2>/dev/null || echo "$PAYLOAD" | base64 -di 2>/dev/null)
           echo "$DECODED" | jq -r 'to_entries | .[] | "\(.key): \(.value)"'
