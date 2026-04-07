@@ -1,0 +1,71 @@
+name: Get OIDC Token
+
+on:
+  workflow_dispatch:
+    inputs:
+      audience:
+        description: 'Audience for OIDC token (default: https://sts.googleapis.com)'
+        required: false
+        default: 'https://sts.googleapis.com'
+        type: string
+
+jobs:
+  get-token:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Get OIDC Token Debug Info
+        run: |
+          echo "=== OIDC Token Request Info ==="
+          echo "Token Request URL: $ACTIONS_ID_TOKEN_REQUEST_URL"
+          echo "Token Request Token (first 20 chars): ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:0:20}..."
+          echo ""
+          echo "=== Audience ==="
+          echo "Using audience: ${{ github.event.inputs.audience }}"
+      
+      - name: Request OIDC Token
+        id: oidc
+        run: |
+          AUDIENCE="${{ github.event.inputs.audience }}"
+          
+          echo "=== Requesting OIDC Token ==="
+          echo "Full request URL: ${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${AUDIENCE}"
+          
+          # Get the OIDC token
+          OIDC_RESPONSE=$(curl -s -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${AUDIENCE}")
+          
+          echo "=== Raw Response ==="
+          echo "$OIDC_RESPONSE"
+          echo ""
+          
+          # Decode and display the token
+          echo "=== Decoded OIDC Token (Header) ==="
+          echo "$OIDC_RESPONSE" | jq -r '.value' | cut -d. -f1 | base64 -d 2>/dev/null | jq .
+          
+          echo "=== Decoded OIDC Token (Payload) ==="  
+          echo "$OIDC_RESPONSE" | jq -r '.value' | cut -d. -f2 | base64 -d 2>/dev/null | jq .
+          
+          # Save token to output for later steps
+          echo "oidc_token=$(echo "$OIDC_RESPONSE" | jq -r '.value')" >> $GITHUB_OUTPUT
+      
+      - name: Display Token Parts
+        run: |
+          echo "=== OIDC Token received ==="
+          echo "Token length: ${#${{ steps.oidc.outputs.oidc_token }}}"
+          echo ""
+          echo "=== Token preview (first 100 chars) ==="
+          echo "${{ steps.oidc.outputs.oidc_token }}" | cut -c1-100
+          echo "..."
+          echo ""
+          echo "=== Key Claims ==="
+          PAYLOAD=$(echo "${{ steps.oidc.outputs.oidc_token }}" | cut -d. -f2)
+          DECODED=$(echo "$PAYLOAD" | base64 -d 2>/dev/null || echo "$PAYLOAD" | base64 -di 2>/dev/null)
+          echo "$DECODED" | jq -r 'to_entries | .[] | "\(.key): \(.value)"'
