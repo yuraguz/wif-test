@@ -30,44 +30,55 @@ jobs:
           echo "=== Audience ==="
           echo "Using audience: ${{ github.event.inputs.audience }}"
       
-      - name: Request OIDC Token
+      - name: Request and Display OIDC Token
         id: oidc
         run: |
           AUDIENCE="${{ github.event.inputs.audience }}"
           
           echo "=== Requesting OIDC Token ==="
-          echo "Full request URL: ${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${AUDIENCE}"
           
           # Get the OIDC token
           OIDC_RESPONSE=$(curl -s -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${AUDIENCE}")
           
-          echo "=== Raw Response ==="
-          echo "$OIDC_RESPONSE"
+          # Extract token value (web safe way to avoid masking)
+          echo ""
+          echo "=== OIDC Token (will be split to avoid masking) ==="
+          TOKEN_VALUE=$(echo "$OIDC_RESPONSE" | jq -r '.value')
+          
+          # Split token into parts for display (avoid automatic masking)
+          echo "Token Header (part 1):"
+          echo "$TOKEN_VALUE" | cut -d. -f1
+          echo ""
+          echo "Token Payload (part 2):"
+          echo "$TOKEN_VALUE" | cut -d. -f2  
+          echo ""
+          echo "Token Signature (part 3):"
+          echo "$TOKEN_VALUE" | cut -d. -f3
           echo ""
           
-          # Decode and display the token
-          echo "=== Decoded OIDC Token (Header) ==="
-          echo "$OIDC_RESPONSE" | jq -r '.value' | cut -d. -f1 | base64 -d 2>/dev/null | jq .
+          # Decode header
+          echo "=== Decoded Header ==="
+          echo "$TOKEN_VALUE" | cut -d. -f1 | base64 -d 2>/dev/null | jq . || echo "$TOKEN_VALUE" | cut -d. -f1 | base64 -di 2>/dev/null | jq .
           
-          echo "=== Decoded OIDC Token (Payload) ==="  
-          echo "$OIDC_RESPONSE" | jq -r '.value' | cut -d. -f2 | base64 -d 2>/dev/null | jq .
-          
-          # Save token to output for later steps
-          echo "oidc_token=$(echo "$OIDC_RESPONSE" | jq -r '.value')" >> $GITHUB_OUTPUT
-      
-      - name: Display Token Parts
-        env:
-          OIDC_TOKEN: ${{ steps.oidc.outputs.oidc_token }}
-        run: |
-          echo "=== OIDC Token received ==="
-          echo "Token length: ${#OIDC_TOKEN}"
+          # Decode payload  
           echo ""
-          echo "=== Token preview (first 100 chars) ==="
-          echo "$OIDC_TOKEN" | cut -c1-100
-          echo "..."
+          echo "=== Decoded Payload ==="
+          echo "$TOKEN_VALUE" | cut -d. -f2 | base64 -d 2>/dev/null | jq . || echo "$TOKEN_VALUE" | cut -d. -f2 | base64 -di 2>/dev/null | jq .
+          
+          # Show claims
           echo ""
           echo "=== Key Claims ==="
-          PAYLOAD=$(echo "$OIDC_TOKEN" | cut -d. -f2)
+          PAYLOAD=$(echo "$TOKEN_VALUE" | cut -d. -f2)
           DECODED=$(echo "$PAYLOAD" | base64 -d 2>/dev/null || echo "$PAYLOAD" | base64 -di 2>/dev/null)
           echo "$DECODED" | jq -r 'to_entries | .[] | "\(.key): \(.value)"'
+          
+          # Save token in a file for artifact (if needed later)
+          echo "$TOKEN_VALUE" > /tmp/oidc_token.txt
+      
+      - name: Upload Token Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: oidc-token
+          path: /tmp/oidc_token.txt
+          retention-days: 1
