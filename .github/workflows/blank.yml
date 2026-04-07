@@ -41,47 +41,63 @@ jobs:
         id: oidc
         run: |
           AUDIENCE="${{ github.event.inputs.audience }}"
-          
+
           echo "=== Requesting OIDC Token ==="
-          
+
           # Get the OIDC token
           OIDC_RESPONSE=$(curl -s -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${AUDIENCE}")
-          
-          # Extract token value (web safe way to avoid masking)
-          echo ""
-          echo "=== OIDC Token (will be split to avoid masking) ==="
+
+          # Extract token value
           TOKEN_VALUE=$(echo "$OIDC_RESPONSE" | jq -r '.value')
-          
-          # Split token into parts for display (avoid automatic masking)
-          echo "Token Header (part 1):"
-          echo "$TOKEN_VALUE" | cut -d. -f1
+
+          # Function to decode base64url
+          base64url_decode() {
+            local input="$1"
+            # Add padding if needed
+            local len=$((${#input} % 4))
+            if [ $len -eq 2 ]; then
+              input="${input}=="
+            elif [ $len -eq 3 ]; then
+              input="${input}="
+            fi
+            # Replace base64url chars with base64 chars
+            echo "$input" | tr '_-' '/+' | base64 -d 2>/dev/null
+          }
+
+          # Split token into parts for display
           echo ""
-          echo "Token Payload (part 2):"
-          echo "$TOKEN_VALUE" | cut -d. -f2  
+          echo "=== OIDC Token Parts ==="
+          HEADER=$(echo "$TOKEN_VALUE" | cut -d. -f1)
+          PAYLOAD=$(echo "$TOKEN_VALUE" | cut -d. -f2)
+          SIGNATURE=$(echo "$TOKEN_VALUE" | cut -d. -f3)
+
+          echo "Header: $HEADER"
           echo ""
-          echo "Token Signature (part 3):"
-          echo "$TOKEN_VALUE" | cut -d. -f3
+          echo "Payload: $PAYLOAD"
           echo ""
-          
+          echo "Signature: ${SIGNATURE:0:50}..."
+
           # Decode header
+          echo ""
           echo "=== Decoded Header ==="
-          echo "$TOKEN_VALUE" | cut -d. -f1 | base64 -d 2>/dev/null | jq . || echo "$TOKEN_VALUE" | cut -d. -f1 | base64 -di 2>/dev/null | jq .
-          
+          base64url_decode "$HEADER" | jq . || echo "Failed to decode header"
+
           # Decode payload  
           echo ""
           echo "=== Decoded Payload ==="
-          echo "$TOKEN_VALUE" | cut -d. -f2 | base64 -d 2>/dev/null | jq . || echo "$TOKEN_VALUE" | cut -d. -f2 | base64 -di 2>/dev/null | jq .
-          
+          DECODED_PAYLOAD=$(base64url_decode "$PAYLOAD")
+          echo "$DECODED_PAYLOAD" | jq . || echo "Failed to decode payload"
+
           # Show claims
           echo ""
           echo "=== Key Claims ==="
-          PAYLOAD=$(echo "$TOKEN_VALUE" | cut -d. -f2)
-          DECODED=$(echo "$PAYLOAD" | base64 -d 2>/dev/null || echo "$PAYLOAD" | base64 -di 2>/dev/null)
-          echo "$DECODED" | jq -r 'to_entries | .[] | "\(.key): \(.value)"'
-          
-          # Save token in a file for artifact (if needed later)
+          echo "$DECODED_PAYLOAD" | jq -r 'to_entries | .[] | "\(.key): \(.value)"' 2>/dev/null || echo "Could not extract claims"
+
+          # Save token in a file for artifact
           echo "$TOKEN_VALUE" > /tmp/oidc_token.txt
+          echo ""
+          echo "Token saved to artifact"
 
       - name: Upload Token Artifact
         uses: actions/upload-artifact@v4
