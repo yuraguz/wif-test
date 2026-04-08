@@ -68,10 +68,13 @@ jobs:
           # Split token into parts for display
           echo ""
           echo "=== OIDC Token Parts ==="
+      
           HEADER=$(echo "$TOKEN_VALUE" | cut -d. -f1)
           PAYLOAD=$(echo "$TOKEN_VALUE" | cut -d. -f2)
           SIGNATURE=$(echo "$TOKEN_VALUE" | cut -d. -f3)
 
+          echo "RAW Token: $TOKEN_VALUE"
+          echo ""
           echo "Header: $HEADER"
           echo ""
           echo "Payload: $PAYLOAD"
